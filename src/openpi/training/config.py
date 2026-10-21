@@ -467,7 +467,7 @@ class TrainConfig:
     # Name of the config. Must be unique. Will be used to reference this config.
     name: tyro.conf.Suppress[str]
     # Project name.
-    project_name: str = "openpi"
+    project_name: str = "semantic-corrections"
     # Experiment name. Will be used to name the metadata and checkpoint directories.
     exp_name: str = tyro.MISSING
 
@@ -915,6 +915,45 @@ _CONFIGS = [
         weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
         num_train_steps=20_000,
         batch_size=32,
+    ),
+    TrainConfig(
+        # This config is for co-training pi05-DROID on the full DROID dataset mixed with a custom dataset.
+        # Both datasets must be in DROID RLDS format under `rlds_data_dir` (custom episodes need "success" in
+        # their file_path, see droid_rlds_dataset.py). Uses joint *velocity* actions to match pi05-DROID.
+        name="pi05_droid_cotrain",
+        model=pi0_config.Pi0Config(
+            pi05=True,
+            action_dim=32,
+            action_horizon=16,
+        ),
+        data=RLDSDroidDataConfig(
+            repo_id="droid",
+            rlds_data_dir="/data/shared",
+            action_space=droid_rlds_dataset.DroidActionSpace.JOINT_VELOCITY,
+            datasets=(
+                droid_rlds_dataset.RLDSDataset(
+                    name="droid",
+                    version="1.0.1",
+                    weight=1.0,  # Set to 0.5 once the custom dataset below is added.
+                    filter_dict_path="gs://openpi-assets/droid/droid_sample_ranges_v1_0_1.json",
+                ),
+                # droid_rlds_dataset.RLDSDataset(
+                #     name="<your_dataset_name>",
+                #     version="<your_dataset_version>",
+                #     weight=0.5,
+                #     filter_dict_path=None,
+                # ),
+            ),
+            assets=AssetsConfig(
+                # Reuse the original pi05-DROID (joint velocity) norm stats.
+                assets_dir="gs://openpi-assets/checkpoints/pi05_droid/assets",
+                asset_id="droid",
+            ),
+        ),
+        weight_loader=weight_loaders.CheckpointWeightLoader("gs://openpi-assets/checkpoints/pi05_droid/params"),
+        num_train_steps=20_000,
+        batch_size=32,
+        num_workers=0,  # Important: RLDS DataLoader requires num_workers=0, handles multi-processing internally
     ),
     #
     # ALOHA Sim configs. This config is used to demonstrate how to train on a simple simulated environment.

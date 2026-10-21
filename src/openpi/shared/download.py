@@ -113,6 +113,11 @@ def _download_gsutil(url: str, local_path: pathlib.Path, **kwargs) -> None:
         )
         _download_fsspec(url, local_path, **kwargs)
         return
+    # `gsutil stat` succeeds only for single objects; directories are copied recursively below.
+    if subprocess.run(["gsutil", "-q", "stat", url], check=False).returncode == 0:
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        subprocess.run(["gsutil", "cp", url, str(local_path)], check=True)
+        return
     local_path.mkdir(parents=True, exist_ok=True)
     subprocess.run(
         ["gsutil", "-m", "cp", "-r", f"{url}/*", str(local_path)],
